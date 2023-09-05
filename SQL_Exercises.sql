@@ -75,28 +75,15 @@ VALUES
 
 /* Question A) */
 
-WITH BundledOrders AS (
-    SELECT DISTINCT o1.order_id
-    FROM Orders.Orders o1
-    JOIN Orders.Bundled_Orders b ON o1.order_id = b.order_id
-    WHERE o1.city_code = 'GLV' OR o1.city_code = 'PLY'
-    AND o1.creation_time >= '2021-11-01 00:00:00'
-    AND o1.creation_time <= '2021-11-01 23:59:59'
-    AND b.is_bundled = 'TRUE'
-    AND b.is_unbundled = 'FALSE'
-),
-TotalOrders AS (
-    SELECT DISTINCT o2.order_id, o2.city_code
-    FROM Orders.Orders o2
-    WHERE (o2.city_code = 'GLV' OR o2.city_code = 'PLY')
-    AND o2.creation_time >= '2021-11-01 00:00:00'
-    AND o2.creation_time <= '2021-11-01 23:59:59'
-)
 SELECT
-    t.city_code,
-    COUNT(DISTINCT bo.order_id) AS bundled_count,
-    COUNT(DISTINCT t.order_id) AS total_count,
-    (COUNT(DISTINCT bo.order_id) * 100.0 / COUNT(DISTINCT t.order_id)) AS percentage_bundled
-FROM TotalOrders t
-LEFT JOIN BundledOrders bo ON t.order_id = bo.order_id
-GROUP BY t.city_code;
+    O.city_code,
+    SUM(CASE WHEN (B.is_bundled = 'TRUE' AND B.is_unbundled = 'FALSE') THEN 1 ELSE 0 END) AS bundled_count,
+    COUNT(*) AS total_count,
+    (SUM(CASE WHEN (B.is_bundled = 'TRUE' AND B.is_unbundled = 'FALSE') THEN 1 ELSE 0 END) * 100.0 / COUNT(*)) AS percentage_bundled
+FROM Orders.Orders as O
+LEFT JOIN Orders.Bundled_Orders as B
+ON (O.order_id = B.order_id)
+WHERE (city_code = 'GLV' OR city_code = 'PLY')
+    AND creation_time >= '2021-11-01 00:00:00'
+    AND creation_time <= '2021-11-01 23:59:59'
+GROUP BY city_code;
