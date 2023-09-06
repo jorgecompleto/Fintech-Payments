@@ -87,3 +87,46 @@ WHERE (city_code = 'GLV' OR city_code = 'PLY')
     AND creation_time >= '2021-11-01 00:00:00'
     AND creation_time <= '2021-11-01 23:59:59'
 GROUP BY city_code;
+
+
+
+/* Question B) 
+Average courier speed:
+1. From pickup time to delivery time for each city in the last 30 days
+2. If a order is bundled consider the traject only to the first delivery (from pickup to first delivery)
+3. pd_dist -> distance from pickup to delivery
+*/
+
+WITH AUX AS(
+SELECT
+        O.order_id,
+        O.city_code,
+        O.pd_dist AS distance_to_delivery,
+        O.pickup_time,
+        O.enters_delivery,
+        B.bundle_id,
+        B.is_bundled,
+        B.is_unbundled,
+        DATEDIFF(SECOND, O.pickup_time, O.enters_delivery) AS seconds_to_delivery, -- Gets the time to deliver
+        CASE WHEN (B.is_bundled = 'TRUE' AND B.is_unbundled = 'FALSE') THEN MIN(O.pd_dist) OVER (PARTITION BY B.bundle_id) -- If an order is bundled compute the minimum distance per bundle_id
+        ELSE MIN(O.pd_dist) OVER (PARTITION BY O.order_id) -- if a order is not bundled compute the minimum distance per order_id
+        END AS min_distance
+
+    FROM Orders.Orders AS O
+    LEFT JOIN Orders.Bundled_Orders AS B
+    ON (O.order_id = B.order_id)
+    WHERE final_status = 'DeliveredStatus' -- Exclude orders without delivery timestamp
+    AND pickup_time >= DATEADD(DAY, -30, '2021-11-30') -- Last 30 days (GETDATE() function should be used in production environment, I've only used '2021-11-30' as a static input to use the values given as example)
+)
+
+SELECT 
+    city_code,
+    AVG(min_distance) AS average_distance,
+    AVG(seconds_to_delivery) AS average_seconds_to_deliver,
+    CASE WHEN AVG(seconds_to_delivery) > 0 THEN ROUND(CAST(AVG(min_distance) AS FLOAT) / CAST(AVG(seconds_to_delivery) AS FLOAT) * 3.6, 2) ELSE NULL END AS average_speed_kmph
+
+FROM AUX
+GROUP BY city_code
+ORDER BY (AVG(min_distance) / AVG(seconds_to_delivery)) * 3.6 DESC
+
+
